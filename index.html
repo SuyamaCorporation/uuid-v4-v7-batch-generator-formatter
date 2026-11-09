@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UUID v4/v7 バッチジェネレーター</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center p-4">
+<h1 class="text-xl font-bold mb-1 text-center">🔑 UUID バッチジェネレーター</h1>
+<p class="text-gray-400 text-sm mb-4 text-center">v4（ランダム）・v7（タイムスタンプソート可能）を一括生成</p>
+
+<div class="w-full max-w-2xl bg-gray-800 rounded-xl p-4 mb-4">
+  <div class="flex flex-wrap gap-4">
+    <label class="flex flex-col text-xs text-gray-300 flex-1">
+      バージョン
+      <div class="flex gap-2 mt-1">
+        <button class="ver-btn flex-1 py-2 rounded font-bold text-sm transition ring-2 ring-purple-500 bg-gray-700" data-ver="v4">v4</button>
+        <button class="ver-btn flex-1 py-2 rounded font-bold text-sm transition bg-gray-700 hover:bg-gray-600" data-ver="v7">v7</button>
+      </div>
+    </label>
+    <label class="flex flex-col text-xs text-gray-300" style="min-width:120px">
+      生成数
+      <input id="count" type="number" value="10" min="1" max="1000"
+        class="mt-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm">
+    </label>
+    <label class="flex flex-col text-xs text-gray-300" style="min-width:160px">
+      フォーマット
+      <select id="format" class="mt-1 bg-gray-700 border border-gray-600 rounded px-2 py-2 text-sm">
+        <option value="hyphen">ハイフン付き (標準)</option>
+        <option value="nohyphen">ハイフンなし</option>
+        <option value="upper">大文字</option>
+        <option value="braces">波括弧 { }</option>
+        <option value="parens">括弧 ( )</option>
+      </select>
+    </label>
+  </div>
+</div>
+
+<button id="generateBtn" class="bg-purple-600 hover:bg-purple-500 px-10 py-3 rounded-xl font-bold text-lg mb-4 transition">🔄 生成</button>
+
+<div class="w-full max-w-2xl bg-gray-800 rounded-xl p-4 mb-4">
+  <div class="flex justify-between items-center mb-2">
+    <span class="text-sm text-gray-400">生成結果 (<span id="resultCount">0</span>件)</span>
+    <div class="flex gap-2">
+      <button id="copyAll" class="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition">📋 全コピー</button>
+      <button id="downloadCsv" class="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition">💾 CSV DL</button>
+    </div>
+  </div>
+  <div id="results" class="font-mono text-xs text-green-300 space-y-0.5 max-h-80 overflow-auto"></div>
+</div>
+
+<div class="w-full max-w-2xl bg-gray-800 rounded-xl p-3">
+  <div class="text-xs text-gray-400 mb-2">UUID情報</div>
+  <div class="grid grid-cols-2 gap-2 text-xs">
+    <div class="bg-gray-700 rounded p-2">
+      <div class="font-bold text-purple-400">UUID v4</div>
+      <div class="text-gray-400 mt-1">完全ランダム。122ビットのランダム性。最も一般的なUUID。</div>
+    </div>
+    <div class="bg-gray-700 rounded p-2">
+      <div class="font-bold text-blue-400">UUID v7</div>
+      <div class="text-gray-400 mt-1">ミリ秒タイムスタンプ+ランダム。時系列ソート可能。DB主キーに最適。</div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentVersion='v4';
+let generated=[];
+
+document.querySelectorAll('.ver-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.ver-btn').forEach(b=>{ b.classList.remove('ring-2','ring-purple-500'); b.classList.add('bg-gray-700'); });
+    btn.classList.add('ring-2','ring-purple-500');
+    currentVersion=btn.dataset.ver;
+  });
+});
+
+function uuidv4(){
+  if(crypto.randomUUID) return crypto.randomUUID();
+  const bytes=new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  bytes[6]=(bytes[6]&0x0f)|0x40;
+  bytes[8]=(bytes[8]&0x3f)|0x80;
+  const hex=[...bytes].map(b=>b.toString(16).padStart(2,'0')).join('');
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+}
+
+function uuidv7(){
+  const ms=BigInt(Date.now());
+  const bytes=new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  // Set timestamp (48 bits)
+  const msHex=ms.toString(16).padStart(12,'0');
+  for(let i=0;i<6;i++) bytes[i]=parseInt(msHex.slice(i*2,i*2+2),16);
+  // Version 7
+  bytes[6]=(bytes[6]&0x0f)|0x70;
+  // Variant
+  bytes[8]=(bytes[8]&0x3f)|0x80;
+  const hex=[...bytes].map(b=>b.toString(16).padStart(2,'0')).join('');
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+}
+
+function formatUUID(uuid,fmt){
+  switch(fmt){
+    case 'nohyphen': return uuid.replace(/-/g,'');
+    case 'upper': return uuid.toUpperCase();
+    case 'braces': return '{'+uuid+'}';
+    case 'parens': return '('+uuid+')';
+    default: return uuid;
+  }
+}
+
+function generate(){
+  const count=Math.min(parseInt(document.getElementById('count').value)||10,1000);
+  const fmt=document.getElementById('format').value;
+  generated=[];
+  for(let i=0;i<count;i++){
+    const raw=currentVersion==='v7'?uuidv7():uuidv4();
+    generated.push(formatUUID(raw,fmt));
+  }
+  const div=document.getElementById('results');
+  div.innerHTML=generated.map((u,i)=>`<div class="flex gap-2 hover:bg-gray-700 px-1 rounded">
+    <span class="text-gray-600 w-6 text-right">${i+1}</span>
+    <span class="text-green-300 select-all">${u}</span>
+  </div>`).join('');
+  document.getElementById('resultCount').textContent=count;
+}
+
+document.getElementById('generateBtn').addEventListener('click',generate);
+document.getElementById('copyAll').addEventListener('click',()=>{
+  navigator.clipboard.writeText(generated.join('\n'));
+});
+document.getElementById('downloadCsv').addEventListener('click',()=>{
+  const csv='uuid\n'+generated.join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='uuids.csv'; a.click();
+});
+
+generate();
+</script>
+</body>
+</html>
